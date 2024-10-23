@@ -1,2 +1,4 @@
-# PC-Optimizer
-This repository contains a collection of batch files designed to optimize your PC's performance. These scripts automate various tasks such as cleaning temporary files, managing system processes, and enhancing system efficiency to improve overall speed and responsiveness.
+# Windows Batch File Instructions
+
+- You might need to change the folder destinations in the batch file, as they can be different for each user.
+- Double-check the paths to make sure they match your system.
