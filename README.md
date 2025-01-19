@@ -17,8 +17,3 @@ This tool terminates all currently running common applications, freeing up syste
 
 ### 5. Ultimate System Tuner
 This utility executes all the above maintenance tasks sequentially, automating the optimization process for efficient system performance improvement.
-
-## Instructions for Windows Batch Files
-- Modify the folder destinations in the batch file as they may vary for each user.
-- Verify that the paths align with your system configuration.
-- Note that running some of these batch files may require administrative privileges.
