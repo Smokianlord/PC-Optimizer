@@ -183,9 +183,41 @@ taskkill /F /IM YourPhoneApp.exe
 echo Done!
 echo.
 
+:: ==============================================================  
+::                      Kill Adobe and Related Services
+:: ==============================================================  
+echo "=========== Killing Adobe and Related Services ==========="
+taskkill /F /IM AdobeCollabSync.exe
+taskkill /F /IM acrotray.exe
+taskkill /F /IM armsvc.exe
+taskkill /F /IM AGMService.exe
+echo Done!
+echo.
+
+:: ==============================================================  
+::                      Kill Canva and Figma
+:: ==============================================================  
+echo "=========== Killing Canva and Figma ==========="
+taskkill /F /IM Canva.exe
+taskkill /F /IM figma_agent.exe
+echo Done!
+echo.
+
+:: ==============================================================  
+::                      Kill CCleaner Performance Optimizer
+:: ==============================================================  
+echo "=========== Killing CCleaner Performance Optimizer ==========="
+taskkill /F /IM CCleanerPerformanceOptimizerService.exe
+echo Done!
+echo.
+
+
 :: ==============================================================
 ::                    Script Completed
 :: =============================================================
+
+
+
 echo Task Slayer: All tasks have been terminated!
 echo.
 
