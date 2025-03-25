@@ -20,16 +20,16 @@ task_names_ui = {
     "4": "Task Slayer"
 }
 
-# Function to execute a batch file in a separate thread
+# Function to execute a batch file with elevated privileges
 def execute_batch(batch_file, task_name):
     if not os.path.exists(batch_file):
         messagebox.showerror("Error", f"{task_name} is missing or not found.")
         return
 
     try:
-        # Use subprocess.run with timeout for better control
-        result = subprocess.run(batch_file, check=True, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=300)
-        # Checking if the command was successful
+        # Adding 'runas' to execute with elevated privileges
+        result = subprocess.run(f'runas /user:Administrator "{batch_file}"', check=True, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=300)
+        
         if result.returncode == 0:
             messagebox.showinfo("Success", f"{task_name} completed successfully!")
         else:
