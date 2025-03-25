@@ -1,5 +1,9 @@
 @echo off
 title Network Reset Utility
+
+:: Set fixed window size (120 columns x 40 rows)
+mode con: cols=120 lines=40
+
 :: Enable ANSI Escape Codes for Colors (Windows 10+)
 echo|set /p=[96m
 
@@ -11,8 +15,8 @@ if %errorLevel% neq 0 (
     exit
 )
 
-:: Set color for non-ANSI systems
-color 0B
+:: Set color for non-ANSI systems (Green text and black background)
+color 0A
 
 :: Display Header
 call :printHeader "Network Reset Utility"
@@ -64,19 +68,19 @@ echo.
 pause
 exit
 
-:: Function to print headers
+:: Function to print headers with enhanced formatting
 :printHeader
 echo [94m==========================================
-echo   %~1
-echo ==========================================[0m
+echo [1;97m        %~1        [0m
+echo [94m==========================================[0m
 exit /b
 
-:: Function to print tasks
+:: Function to print tasks with color and better clarity
 :printTask
 echo [96m[*] %~1...[0m
 exit /b
 
-:: Function to print success messages
+:: Function to print success messages with green highlight
 :printSuccess
 echo [92m[OK] %~1[0m
 exit /b
