@@ -1,5 +1,9 @@
 @echo off
 title System Health Check
+
+:: Set fixed window size (120 columns x 40 rows)
+mode con: cols=120 lines=40
+
 :: Check for Admin Privileges
 NET SESSION >NUL 2>&1
 IF %ERRORLEVEL% NEQ 0 (
