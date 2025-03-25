@@ -1,5 +1,12 @@
 @echo off
 title Delete Temp Files
+
+:: Set larger window size (120 columns x 40 rows)
+mode con: cols=120 lines=40
+
+:: Set color (light gray background, green text)
+color F0
+
 :: Enable ANSI Escape Codes for Colors (Windows 10+)
 echo|set /p=[92m
 
@@ -46,19 +53,19 @@ echo.
 pause
 exit
 
-:: Function to print headers
+:: Function to print headers with enhanced formatting
 :printHeader
-echo [94m==========================================
-echo   %~1
-echo ==========================================[0m
+echo [94m==========================================[0m
+echo [1;97m        %~1        [0m
+echo [94m==========================================[0m
 exit /b
 
-:: Function to print tasks
+:: Function to print tasks with color and better clarity
 :printTask
 echo [93m[*] %~1...[0m
 exit /b
 
-:: Function to print success messages
+:: Function to print success messages with green highlight
 :printSuccess
 echo [92m[OK] %~1[0m
 exit /b
