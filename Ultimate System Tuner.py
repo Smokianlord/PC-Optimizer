@@ -6,10 +6,10 @@ import threading
 
 # Path to the batch files
 batch_files = {
-    "1": "Delete Temp Files.bat",
-    "2": "Network Reset Utility.bat",
-    "3": "System Health Check.bat",
-    "4": "Task Slayer.bat"
+    "1": r"D:\GitHub\PC-Optimizer\Delete Temp Files.bat",
+    "2": r"D:\GitHub\PC-Optimizer\Network Reset Utility.bat",
+    "3": r"D:\GitHub\PC-Optimizer\System Health Check.bat",
+    "4": r"D:\GitHub\PC-Optimizer\Task Slayer.bat"
 }
 
 # Task names for UI (without .bat suffix)
