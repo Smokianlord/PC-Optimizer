@@ -20,16 +20,17 @@ task_names_ui = {
     "4": "Task Slayer"
 }
 
-# Function to execute a batch file with elevated privileges
+# Function to execute a batch file with elevated privileges using PowerShell
 def execute_batch(batch_file, task_name):
     if not os.path.exists(batch_file):
         messagebox.showerror("Error", f"{task_name} is missing or not found.")
         return
 
     try:
-        # Adding 'runas' to execute with elevated privileges
-        result = subprocess.run(f'runas /user:Administrator "{batch_file}"', check=True, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=300)
-        
+        # Use PowerShell to run the batch file as administrator
+        command = f"PowerShell Start-Process cmd.exe -ArgumentList '/c {batch_file}' -Verb RunAs"
+        result = subprocess.run(command, check=True, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=300)
+
         if result.returncode == 0:
             messagebox.showinfo("Success", f"{task_name} completed successfully!")
         else:
