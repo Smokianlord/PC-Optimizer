@@ -4,7 +4,7 @@ from tkinter import messagebox
 import os
 import threading
 
-# Path to the batch files
+# Path to the batch files (Use the full path if necessary)
 batch_files = {
     "1": r"D:\GitHub\PC-Optimizer\Delete Temp Files.bat",
     "2": r"D:\GitHub\PC-Optimizer\Network Reset Utility.bat",
@@ -27,18 +27,17 @@ def execute_batch(batch_file, task_name):
         return
 
     try:
-        # Use PowerShell to run the batch file as administrator
+        # PowerShell command to run the batch file as administrator
         command = f"PowerShell Start-Process cmd.exe -ArgumentList '/c {batch_file}' -Verb RunAs"
-        result = subprocess.run(command, check=True, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=300)
+        
+        # Running the command using subprocess.Popen
+        process = subprocess.Popen(command, shell=True)
+        process.wait()  # Wait for the process to complete
 
-        if result.returncode == 0:
+        if process.returncode == 0:
             messagebox.showinfo("Success", f"{task_name} completed successfully!")
         else:
-            messagebox.showerror("Error", f"An error occurred while executing {task_name}. The task may not be working properly.\n{result.stderr.decode()}")
-    except subprocess.TimeoutExpired:
-        messagebox.showerror("Error", f"{task_name} took too long to complete and was terminated.")
-    except subprocess.CalledProcessError as e:
-        messagebox.showerror("Error", f"Error while executing {task_name}. \n{e}")
+            messagebox.showerror("Error", f"An error occurred while executing {task_name}. The task may not be working properly.")
     except Exception as e:
         messagebox.showerror("Error", f"An unexpected error occurred: {str(e)}")
 
