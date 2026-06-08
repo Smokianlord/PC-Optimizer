@@ -32,9 +32,9 @@ from tkinter import scrolledtext
 
 
 APP_NAME = "PC Optimizer"
-APP_VERSION = "2.0"
-WINDOW_WIDTH = 980
-WINDOW_HEIGHT = 760
+APP_VERSION = "2.1"
+WINDOW_WIDTH = 1040
+WINDOW_HEIGHT = 780
 
 
 # -----------------------------
@@ -159,10 +159,10 @@ TASK_SLAYER_GROUPS: dict[str, list[str]] = {
 }
 
 FEATURE_COMMANDS: dict[str, list[str]] = {
-    "Delete Temp Files": [],
-    "Network Reset Utility": ["ipconfig", "netsh", "powershell"],
-    "System Health Check": ["DISM", "SFC", "chkdsk"],
-    "Task Slayer": ["taskkill"],
+    "Clean Temporary Files": [],
+    "Reset Internet Connection": ["ipconfig", "netsh", "powershell"],
+    "Repair Windows System": ["DISM", "SFC", "chkdsk"],
+    "Close Background Apps": ["taskkill"],
 }
 
 
@@ -184,7 +184,7 @@ def adjust_hex_color(hex_color: str, amount: int) -> str:
 
 
 class ThreeDButton(tk.Canvas):
-    """Canvas based raised button with shadow, hover, and click depth."""
+    """Canvas based raised button with shadow, hover, click depth, and safe text spacing."""
 
     def __init__(
         self,
@@ -192,9 +192,10 @@ class ThreeDButton(tk.Canvas):
         title: str,
         subtitle: str,
         command: Callable[[], None],
-        width: int = 284,
-        height: int = 76,
+        width: int = 300,
+        height: int = 96,
         color: str = "#2f80ed",
+        accent: str = "C",
         text_color: str = "#ffffff",
         **kwargs,
     ) -> None:
@@ -202,7 +203,7 @@ class ThreeDButton(tk.Canvas):
             master,
             width=width,
             height=height,
-            bg=kwargs.pop("bg", "#101828"),
+            bg=kwargs.pop("bg", "#0b1220"),
             highlightthickness=0,
             bd=0,
             cursor="hand2",
@@ -214,6 +215,7 @@ class ThreeDButton(tk.Canvas):
         self.width_value = width
         self.height_value = height
         self.color = color
+        self.accent = accent
         self.text_color = text_color
         self.hovered = False
         self.pressed = False
@@ -234,39 +236,52 @@ class ThreeDButton(tk.Canvas):
 
     def draw(self) -> None:
         self.delete("all")
-        offset = 5 if not self.pressed else 2
-        body_y = 4 if not self.pressed else 7
+        offset = 8 if not self.pressed else 3
+        body_y = 6 if not self.pressed else 11
         base = self.color
         if not self.enabled:
-            base = "#667085"
+            base = "#64748b"
         elif self.hovered:
-            base = adjust_hex_color(base, 18)
+            base = adjust_hex_color(base, 16)
 
-        dark = adjust_hex_color(base, -55)
-        light = adjust_hex_color(base, 34)
-        shadow = "#05080f"
+        dark = adjust_hex_color(base, -58)
+        light = adjust_hex_color(base, 30)
+        shadow = "#020617"
         w = self.width_value
         h = self.height_value
 
-        self.rounded_rect(10, 10 + offset, w - 8, h - 4 + offset, 18, fill=shadow, outline="")
-        self.rounded_rect(8, body_y, w - 10, h - 12, 18, fill=dark, outline="")
-        self.rounded_rect(8, body_y, w - 10, h - 18, 18, fill=base, outline=light, width=2)
-        self.create_line(26, body_y + 8, w - 30, body_y + 8, fill=light, width=1)
+        # Raised 3D base and shadow.
+        self.rounded_rect(10, 14 + offset, w - 8, h - 4 + offset, 16, fill=shadow, outline="")
+        self.rounded_rect(8, body_y + 6, w - 10, h - 15, 16, fill=dark, outline="")
+        self.rounded_rect(8, body_y, w - 10, h - 22, 16, fill=base, outline=light, width=2)
+
+        # Small left badge gives each action a clear visual anchor without using emoji fonts.
+        self.create_oval(24, body_y + 20, 54, body_y + 50, fill="#ffffff", outline="")
         self.create_text(
-            22,
-            body_y + 24,
+            39,
+            body_y + 35,
+            text=self.accent,
+            anchor="center",
+            font=("Segoe UI", 11, "bold"),
+            fill=base,
+        )
+
+        self.create_text(
+            66,
+            body_y + 25,
             text=self.title,
             anchor="w",
-            font=("Segoe UI", 13, "bold"),
+            font=("Segoe UI", 12, "bold"),
             fill=self.text_color,
         )
         self.create_text(
-            22,
-            body_y + 49,
+            66,
+            body_y + 53,
             text=self.subtitle,
             anchor="w",
             font=("Segoe UI", 9),
-            fill="#e6eefc",
+            fill="#edf6ff",
+            width=w - 86,
         )
 
     def on_enter(self, _event: tk.Event) -> None:
@@ -317,7 +332,7 @@ class PCOptimizerApp:
 
         self.root.title(f"{APP_NAME} v{APP_VERSION}")
         self.root.geometry(f"{WINDOW_WIDTH}x{WINDOW_HEIGHT}")
-        self.root.minsize(900, 700)
+        self.root.minsize(980, 720)
         self.root.configure(bg="#0b1220")
 
         icon_file = resource_path("app_icon.ico")
@@ -333,33 +348,36 @@ class PCOptimizerApp:
 
     def build_ui(self) -> None:
         shell = tk.Frame(self.root, bg="#0b1220")
-        shell.pack(fill="both", expand=True, padx=22, pady=18)
+        shell.pack(fill="both", expand=True, padx=26, pady=20)
 
         header = tk.Frame(shell, bg="#0b1220")
         header.pack(fill="x")
 
+        title_area = tk.Frame(header, bg="#0b1220")
+        title_area.pack(side="left", fill="x", expand=True)
+
         tk.Label(
-            header,
+            title_area,
             text="PC Optimizer",
             bg="#0b1220",
             fg="#f8fafc",
             font=("Segoe UI", 26, "bold"),
-        ).pack(side="left", anchor="w")
+        ).pack(anchor="w")
 
-        self.admin_badge = tk.Label(
-            header,
-            text="ADMIN" if is_admin() else "NOT ADMIN",
-            bg="#14532d" if is_admin() else "#7c2d12",
-            fg="#ffffff",
-            font=("Segoe UI", 10, "bold"),
-            padx=12,
-            pady=5,
-        )
-        self.admin_badge.pack(side="right", padx=(8, 0))
+        tk.Label(
+            title_area,
+            text="A simple control panel for your PC cleanup, repair, network reset, and app closing tools.",
+            bg="#0b1220",
+            fg="#9fb3d1",
+            font=("Segoe UI", 10),
+        ).pack(anchor="w", pady=(2, 0))
+
+        action_area = tk.Frame(header, bg="#0b1220")
+        action_area.pack(side="right", anchor="ne")
 
         self.admin_button = tk.Button(
-            header,
-            text="Restart as Administrator",
+            action_area,
+            text="Open as Administrator",
             command=self.request_admin,
             bg="#f97316",
             fg="#ffffff",
@@ -368,56 +386,70 @@ class PCOptimizerApp:
             relief="raised",
             bd=4,
             font=("Segoe UI", 10, "bold"),
-            padx=10,
-            pady=4,
+            padx=12,
+            pady=6,
         )
-        self.admin_button.pack(side="right")
+        self.admin_button.pack(side="left", padx=(0, 10))
         if is_admin():
-            self.admin_button.configure(state="disabled", text="Administrator Mode Active")
+            self.admin_button.configure(state="disabled", text="Administrator Active")
 
-        tk.Label(
-            shell,
-            text="One clean Python control panel for the maintenance commands from your ZIP.",
-            bg="#0b1220",
-            fg="#94a3b8",
-            font=("Segoe UI", 11),
-        ).pack(anchor="w", pady=(2, 16))
+        self.admin_badge = tk.Label(
+            action_area,
+            text="ADMIN MODE" if is_admin() else "STANDARD MODE",
+            bg="#14532d" if is_admin() else "#92400e",
+            fg="#ffffff",
+            font=("Segoe UI", 10, "bold"),
+            padx=13,
+            pady=9,
+        )
+        self.admin_badge.pack(side="left")
 
-        info = tk.Frame(shell, bg="#111827", highlightbackground="#243044", highlightthickness=1)
-        info.pack(fill="x", pady=(0, 16))
+        info = tk.Frame(shell, bg="#111827", highlightbackground="#26364f", highlightthickness=1)
+        info.pack(fill="x", pady=(18, 18))
         tk.Label(
             info,
-            text="Validation is built in: Windows check, Administrator check, required command check, and path safety check before risky actions.",
+            text="Customer-safe mode: every important action asks before it runs. Admin mode is required for cleanup, repair, reset, and app-closing commands.",
             bg="#111827",
             fg="#dbeafe",
             font=("Segoe UI", 10),
-            padx=12,
-            pady=10,
-        ).pack(anchor="w")
+            padx=14,
+            pady=12,
+            anchor="w",
+        ).pack(fill="x")
 
         button_area = tk.Frame(shell, bg="#0b1220")
         button_area.pack(fill="x")
 
         specs = [
-            ("Delete Temp Files", "Windows Temp, Prefetch, User Temp", "#16a34a", self.run_delete_temp),
-            ("Network Reset", "DNS, IP renew, Winsock, TCP/IP", "#2563eb", self.run_network_reset),
-            ("System Health Check", "DISM, SFC, CHKDSK", "#7c3aed", self.run_health_check),
-            ("Task Slayer", "Close apps from original BAT list", "#dc2626", self.run_task_slayer),
-            ("Validate System", "Check OS, admin, commands", "#0891b2", self.run_validation),
-            ("Run All Tasks", "Run the full optimizer sequence", "#ea580c", self.run_all_tasks),
+            ("Clean Temporary Files", "Remove Windows cache and temp files", "#16a34a", "C", self.run_delete_temp),
+            ("Reset Internet Connection", "Flush DNS and reset network settings", "#2563eb", "N", self.run_network_reset),
+            ("Repair Windows System", "Run DISM, SFC, and disk check", "#7c3aed", "R", self.run_health_check),
+            ("Close Background Apps", "Stop the apps from the BAT list", "#dc2626", "A", self.run_task_slayer),
+            ("Check Requirements", "Verify Windows, admin, and tools", "#0891b2", "V", self.run_validation),
+            ("Run Full Optimization", "Run every maintenance step in order", "#ea580c", "F", self.run_all_tasks),
         ]
 
-        for index, (title, subtitle, color, command) in enumerate(specs):
-            btn = ThreeDButton(button_area, title, subtitle, command, color=color, bg="#0b1220")
+        for index, (title, subtitle, color, accent, command) in enumerate(specs):
+            btn = ThreeDButton(
+                button_area,
+                title,
+                subtitle,
+                command,
+                width=300,
+                height=96,
+                color=color,
+                accent=accent,
+                bg="#0b1220",
+            )
             row, col = divmod(index, 3)
-            btn.grid(row=row, column=col, padx=8, pady=8, sticky="nsew")
+            btn.grid(row=row, column=col, padx=9, pady=9, sticky="nsew")
             self.buttons.append(btn)
 
         for col in range(3):
             button_area.grid_columnconfigure(col, weight=1)
 
         log_header = tk.Frame(shell, bg="#0b1220")
-        log_header.pack(fill="x", pady=(18, 6))
+        log_header.pack(fill="x", pady=(20, 7))
         tk.Label(
             log_header,
             text="Activity Log",
@@ -437,11 +469,12 @@ class PCOptimizerApp:
             bd=3,
             font=("Segoe UI", 9, "bold"),
             padx=8,
+            pady=2,
         ).pack(side="right")
 
         self.log_box = scrolledtext.ScrolledText(
             shell,
-            height=18,
+            height=17,
             bg="#020617",
             fg="#d1fae5",
             insertbackground="#ffffff",
@@ -450,6 +483,7 @@ class PCOptimizerApp:
             bd=0,
             padx=10,
             pady=10,
+            wrap="word",
         )
         self.log_box.pack(fill="both", expand=True)
 
@@ -465,13 +499,14 @@ class PCOptimizerApp:
         status.pack(fill="x", pady=(8, 0))
 
     def write_startup_status(self) -> None:
-        self.log(f"{APP_NAME} v{APP_VERSION} started.")
-        self.log(f"Detected OS: {os.name} / {sys.platform}")
-        self.log(f"Administrator: {'Yes' if is_admin() else 'No'}")
+        self.log(f"{APP_NAME} v{APP_VERSION} is ready.")
         if not is_windows():
-            self.log("This app is designed for Windows commands. Buttons are kept available for validation only.")
-        elif not is_admin():
-            self.log("Tip: click 'Restart as Administrator' before running optimizer actions.")
+            self.log("This app is designed for Windows. Open it on Windows to run the optimizer tools.")
+            return
+        if is_admin():
+            self.log("Mode: Administrator. All optimizer actions are available.")
+        else:
+            self.log("Mode: Standard. Click 'Open as Administrator' before running optimizer actions.")
 
     def log(self, message: str) -> None:
         timestamp = time.strftime("%H:%M:%S")
@@ -503,7 +538,7 @@ class PCOptimizerApp:
         if relaunch_as_admin():
             self.root.destroy()
         else:
-            messagebox.showerror("Admin relaunch failed", "Windows did not start the app as administrator.")
+            messagebox.showerror("Could not open as Administrator", "Windows did not start the app as Administrator.")
 
     def require_ready(self, feature_name: str, commands: Iterable[str] | None = None) -> bool:
         if not is_windows():
@@ -512,7 +547,7 @@ class PCOptimizerApp:
         if not is_admin():
             answer = messagebox.askyesno(
                 "Administrator required",
-                f"{feature_name} needs Administrator permission. Restart the app as Administrator now?",
+                f"{feature_name} needs Administrator permission. Open the app as Administrator now?",
             )
             if answer:
                 self.request_admin()
@@ -521,14 +556,14 @@ class PCOptimizerApp:
         if missing:
             messagebox.showerror(
                 "Validation failed",
-                "Missing required command(s): " + ", ".join(missing),
+                "These required Windows tools were not found: " + ", ".join(missing),
             )
             return False
         return True
 
     def start_worker(self, title: str, target: Callable[[], None]) -> None:
         if self.worker and self.worker.is_alive():
-            messagebox.showwarning("Busy", "Another task is already running.")
+            messagebox.showwarning("Please wait", "Another task is already running.")
             return
 
         def wrapper() -> None:
@@ -606,39 +641,39 @@ class PCOptimizerApp:
     # -----------------------------
 
     def run_validation(self) -> None:
-        self.start_worker("Validation Check", self.validation_action)
+        self.start_worker("Check Requirements", self.validation_action)
 
     def validation_action(self) -> None:
-        self.log("Running validation checks...")
-        self.log(f"Windows: {'Yes' if is_windows() else 'No'}")
-        self.log(f"Administrator: {'Yes' if is_admin() else 'No'}")
+        self.log("Checking requirements...")
+        self.log(f"Windows detected: {'Yes' if is_windows() else 'No'}")
+        self.log(f"Administrator mode: {'Yes' if is_admin() else 'No'}")
         for feature, commands in FEATURE_COMMANDS.items():
             if not commands:
-                self.log(f"{feature}: no external commands required")
+                self.log(f"{feature}: no external command required")
                 continue
             missing = [cmd for cmd in commands if not command_exists(cmd)]
             if missing:
                 self.log(f"{feature}: missing {', '.join(missing)}")
             else:
-                self.log(f"{feature}: all required commands found")
+                self.log(f"{feature}: ready")
 
         if is_windows():
             paths = self.temp_paths()
-            self.log("Temp cleanup target paths:")
+            self.log("Cleanup folders that will be checked:")
             for path in paths:
-                status = "exists" if path.exists() else "missing"
+                status = "found" if path.exists() else "not found"
                 self.log(f" - {path} ({status})")
-        self.log("Validation finished.")
+        self.log("Requirement check finished.")
 
     def run_delete_temp(self) -> None:
-        if not self.require_ready("Delete Temp Files", FEATURE_COMMANDS["Delete Temp Files"]):
+        if not self.require_ready("Clean Temporary Files", FEATURE_COMMANDS["Clean Temporary Files"]):
             return
         if not messagebox.askyesno(
             "Confirm cleanup",
-            "This will delete files inside Windows Temp, Prefetch, and user Temp folders. Continue?",
+            "This will remove files inside Windows Temp, Prefetch, and user Temp folders. Files currently used by Windows will be skipped. Continue?",
         ):
             return
-        self.start_worker("Delete Temp Files", self.delete_temp_action)
+        self.start_worker("Clean Temporary Files", self.delete_temp_action)
 
     def temp_paths(self) -> list[Path]:
         system_root = Path(os.environ.get("SystemRoot", r"C:\Windows"))
@@ -699,20 +734,21 @@ class PCOptimizerApp:
             total_files += files_removed
             total_dirs += dirs_removed
             total_failed += failed
-        self.log(f"Cleanup summary: files={total_files}, folders={total_dirs}, skipped/failed={total_failed}")
+        self.log(f"Cleanup summary: files removed={total_files}, folders removed={total_dirs}, skipped/failed={total_failed}")
 
     def run_network_reset(self) -> None:
-        if not self.require_ready("Network Reset Utility", FEATURE_COMMANDS["Network Reset Utility"]):
+        if not self.require_ready("Reset Internet Connection", FEATURE_COMMANDS["Reset Internet Connection"]):
             return
         if not messagebox.askyesno(
             "Confirm network reset",
-            "This can temporarily disconnect your internet while DNS, IP, Winsock, TCP/IP, and adapters are reset. Continue?",
+            "This may temporarily disconnect your internet while DNS, IP, Winsock, TCP/IP, and network adapters are reset. Continue?",
         ):
             return
-        self.start_worker("Network Reset Utility", self.network_reset_action)
+        self.start_worker("Reset Internet Connection", self.network_reset_action)
 
     def network_reset_action(self) -> None:
-        for _ in range(3):
+        self.log("Flushing DNS cache...")
+        for _ in range(20):
             self.run_subprocess(["ipconfig", "/flushdns"])
         self.run_subprocess(["ipconfig", "/release"])
         self.run_subprocess(["ipconfig", "/renew"])
@@ -730,17 +766,17 @@ class PCOptimizerApp:
         )
         self.run_subprocess(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script])
         self.run_subprocess(["ipconfig", "/all"])
-        self.log("Network reset completed. A PC restart may be required for Winsock/TCP changes.")
+        self.log("Network reset completed. Restart the PC if internet issues continue.")
 
     def run_health_check(self) -> None:
-        if not self.require_ready("System Health Check", FEATURE_COMMANDS["System Health Check"]):
+        if not self.require_ready("Repair Windows System", FEATURE_COMMANDS["Repair Windows System"]):
             return
         if not messagebox.askyesno(
-            "Confirm health check",
-            "This runs DISM, SFC, and CHKDSK C: /F /R. It can take a long time and CHKDSK may schedule a repair for the next restart. Continue?",
+            "Confirm Windows repair",
+            "This runs DISM, SFC, and CHKDSK. It can take a long time, and CHKDSK may run after the next restart. Continue?",
         ):
             return
-        self.start_worker("System Health Check", self.health_check_action)
+        self.start_worker("Repair Windows System", self.health_check_action)
 
     def health_check_action(self) -> None:
         self.run_subprocess(["DISM", "/Online", "/Cleanup-Image", "/ScanHealth"])
@@ -748,17 +784,17 @@ class PCOptimizerApp:
         self.run_subprocess(["DISM", "/Online", "/Cleanup-Image", "/RestoreHealth"])
         self.run_subprocess(["SFC", "/SCANNOW"])
         self.run_subprocess(["chkdsk", "C:", "/F", "/R"], input_text="Y\n")
-        self.log("System health check finished. Restart Windows if CHKDSK was scheduled.")
+        self.log("Windows repair finished. Restart Windows if CHKDSK was scheduled.")
 
     def run_task_slayer(self) -> None:
-        if not self.require_ready("Task Slayer", FEATURE_COMMANDS["Task Slayer"]):
+        if not self.require_ready("Close Background Apps", FEATURE_COMMANDS["Close Background Apps"]):
             return
         if not messagebox.askyesno(
-            "Confirm Task Slayer",
-            "This will force-close the apps and background tools listed in the original batch file. Save your work first. Continue?",
+            "Confirm app closing",
+            "This will force-close the apps and background tools listed in the original Task Slayer BAT file. Save your work first. Continue?",
         ):
             return
-        self.start_worker("Task Slayer", self.task_slayer_action)
+        self.start_worker("Close Background Apps", self.task_slayer_action)
 
     def task_slayer_action(self) -> None:
         killed = 0
@@ -766,36 +802,36 @@ class PCOptimizerApp:
         for group, processes in TASK_SLAYER_GROUPS.items():
             self.log(f"-- {group} --")
             for process_name in processes:
-                code = self.run_subprocess(["taskkill", "/F", "/T", "/IM", process_name])
+                code = self.run_subprocess(["taskkill", "/F", "/IM", process_name])
                 if code == 0:
                     killed += 1
                 else:
                     not_running_or_failed += 1
-        self.log(f"Task Slayer summary: killed/matched={killed}, not running or failed={not_running_or_failed}")
+        self.log(f"App closing summary: closed/matched={killed}, not running or failed={not_running_or_failed}")
 
     def run_all_tasks(self) -> None:
         all_commands = [cmd for commands in FEATURE_COMMANDS.values() for cmd in commands]
-        if not self.require_ready("Run All Tasks", all_commands):
+        if not self.require_ready("Run Full Optimization", all_commands):
             return
         if not messagebox.askyesno(
-            "Confirm full optimizer",
-            "This will run Delete Temp Files, Network Reset, System Health Check, and Task Slayer sequentially. It can disconnect internet, close apps, and schedule CHKDSK on restart. Continue?",
+            "Confirm full optimization",
+            "This will run cleanup, network reset, Windows repair, and app closing in order. It may disconnect internet, close apps, and schedule CHKDSK on restart. Continue?",
         ):
             return
-        self.start_worker("Run All Tasks", self.run_all_action)
+        self.start_worker("Run Full Optimization", self.run_all_action)
 
     def run_all_action(self) -> None:
-        self.log("Running full sequence: Delete Temp -> Network Reset -> System Health -> Task Slayer")
+        self.log("Running full sequence: Cleanup -> Network Reset -> Windows Repair -> Close Apps")
         self.delete_temp_action()
         self.network_reset_action()
         self.health_check_action()
         self.task_slayer_action()
-        self.log("All optimizer tasks completed.")
+        self.log("Full optimization completed.")
 
 
 def main() -> None:
     root = tk.Tk()
-    app = PCOptimizerApp(root)
+    PCOptimizerApp(root)
     root.mainloop()
 
 
