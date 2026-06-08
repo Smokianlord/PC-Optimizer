@@ -32,7 +32,7 @@ from tkinter import scrolledtext
 
 
 APP_NAME = "PC Optimizer"
-APP_VERSION = "2.1"
+APP_VERSION = "2"
 WINDOW_WIDTH = 1040
 WINDOW_HEIGHT = 780
 
@@ -120,7 +120,8 @@ def create_no_window_flag() -> int:
 
 TASK_SLAYER_GROUPS: dict[str, list[str]] = {
     "Browsers": [
-        "chrome.exe", "msedge.exe", "brave.exe", "firefox.exe", "MicrosoftEdgeUpdate.exe",
+        "chrome.exe", "msedge.exe", "brave.exe", "firefox.exe", "opera.exe", "opera_gx.exe",
+        "vivaldi.exe", "browser.exe", "Arc.exe", "MicrosoftEdgeUpdate.exe",
     ],
     "Gaming and Steam": [
         "steam.exe", "steamwebhelper.exe", "steamservice.exe", "steam_bootstrapper.exe",
@@ -131,8 +132,12 @@ TASK_SLAYER_GROUPS: dict[str, list[str]] = {
     ],
     "File Sharing and Cloud Services": [
         "shareit.exe", "shareitservice.exe", "googledrivesync.exe", "GoogleDriveFS.exe",
+        "OneDrive.exe", "Dropbox.exe", "MEGAsync.exe", "iCloudDrive.exe", "iCloudPhotos.exe",
     ],
-    "Communication Tools": ["discord.exe", "WhatsApp.exe"],
+    "Communication and Meeting Apps": [
+        "discord.exe", "WhatsApp.exe", "Telegram.exe", "Signal.exe", "Skype.exe",
+        "Teams.exe", "ms-teams.exe", "Zoom.exe", "slack.exe",
+    ],
     "Cloudflare WARP": [
         "warp.exe", "warp-svc.exe", "cloudflare-warp.exe", "CloudflareWARP.exe", "WARPClient.exe",
     ],
@@ -150,11 +155,32 @@ TASK_SLAYER_GROUPS: dict[str, list[str]] = {
     "Background Services": [
         "wallpaper32.exe", "winrtutil32.exe", "wmpnetwk.exe", "NewsAndInterests.exe", "node.exe", "SearchApp.exe",
     ],
-    "Development Tools": ["GitHubDesktop.exe"],
-    "Network Tools": ["DnsJumper.exe"],
+    "CSE Student Tools": [
+        "Code.exe", "Cursor.exe", "Windsurf.exe", "VSCodium.exe", "GitHubDesktop.exe",
+        "pycharm64.exe", "pycharm.exe", "idea64.exe", "idea.exe", "webstorm64.exe", "webstorm.exe",
+        "studio64.exe", "adb.exe", "emulator.exe", "qemu-system-x86_64.exe",
+        "Docker Desktop.exe", "Docker Desktop Backend.exe", "com.docker.backend.exe", "com.docker.service.exe",
+        "postman.exe", "Insomnia.exe", "xampp-control.exe", "httpd.exe", "mysqld.exe",
+        "python.exe", "pythonw.exe", "java.exe", "javaw.exe", "dotnet.exe", "node.exe",
+    ],
+    "BBA and Office Student Tools": [
+        "WINWORD.EXE", "EXCEL.EXE", "POWERPNT.EXE", "MSACCESS.EXE", "OUTLOOK.EXE",
+        "ONENOTE.EXE", "Acrobat.exe", "FoxitPDFReader.exe", "WPSOffice.exe", "wps.exe",
+        "Notion.exe", "Obsidian.exe", "Mendeley Desktop.exe", "Zotero.exe",
+    ],
+    "EEE and Engineering Student Tools": [
+        "MATLAB.exe", "ltspice.exe", "scad3.exe", "multisim.exe", "Ultiboard.exe",
+        "ISIS.EXE", "ARES.EXE", "Proteus.exe", "kicad.exe", "eeschema.exe", "pcbnew.exe",
+        "eagle.exe", "Fusion360.exe", "acad.exe", "SLDWORKS.exe", "CodeBlocks.exe",
+    ],
+    "Network and Remote Tools": ["DnsJumper.exe", "AnyDesk.exe", "TeamViewer.exe", "RustDesk.exe"],
     "Phone Link": ["PhoneLink.exe", "PhoneExperienceHost.exe", "YourPhone.exe", "YourPhoneApp.exe"],
-    "Adobe and Related Services": ["AdobeCollabSync.exe", "acrotray.exe", "armsvc.exe", "AGMService.exe"],
-    "Canva and Figma": ["Canva.exe", "figma_agent.exe"],
+    "Adobe and Related Services": [
+        "AdobeCollabSync.exe", "acrotray.exe", "armsvc.exe", "AGMService.exe",
+        "Photoshop.exe", "Illustrator.exe", "AfterFX.exe", "Premiere Pro.exe", "Lightroom.exe",
+        "Adobe Desktop Service.exe", "Creative Cloud.exe", "CoreSync.exe",
+    ],
+    "Canva and Figma": ["Canva.exe", "Figma.exe", "figma_agent.exe"],
     "CCleaner Performance Optimizer": ["CCleanerPerformanceOptimizerService.exe"],
 }
 
@@ -404,27 +430,14 @@ class PCOptimizerApp:
         )
         self.admin_badge.pack(side="left")
 
-        info = tk.Frame(shell, bg="#111827", highlightbackground="#26364f", highlightthickness=1)
-        info.pack(fill="x", pady=(18, 18))
-        tk.Label(
-            info,
-            text="Customer-safe mode: every important action asks before it runs. Admin mode is required for cleanup, repair, reset, and app-closing commands.",
-            bg="#111827",
-            fg="#dbeafe",
-            font=("Segoe UI", 10),
-            padx=14,
-            pady=12,
-            anchor="w",
-        ).pack(fill="x")
-
         button_area = tk.Frame(shell, bg="#0b1220")
-        button_area.pack(fill="x")
+        button_area.pack(fill="x", pady=(18, 0))
 
         specs = [
             ("Clean Temporary Files", "Remove Windows cache and temp files", "#16a34a", "C", self.run_delete_temp),
             ("Reset Internet Connection", "Flush DNS and reset network settings", "#2563eb", "N", self.run_network_reset),
             ("Repair Windows System", "Run DISM, SFC, and disk check", "#7c3aed", "R", self.run_health_check),
-            ("Close Background Apps", "Stop the apps from the BAT list", "#dc2626", "A", self.run_task_slayer),
+            ("Close Background Apps", "Stop common study and background apps", "#dc2626", "A", self.run_task_slayer),
             ("Check Requirements", "Verify Windows, admin, and tools", "#0891b2", "V", self.run_validation),
             ("Run Full Optimization", "Run every maintenance step in order", "#ea580c", "F", self.run_all_tasks),
         ]
@@ -791,7 +804,7 @@ class PCOptimizerApp:
             return
         if not messagebox.askyesno(
             "Confirm app closing",
-            "This will force-close the apps and background tools listed in the original Task Slayer BAT file. Save your work first. Continue?",
+            "This can close browsers, chat apps, coding tools, office apps, engineering apps, and other background programs. Save your work first. Continue?",
         ):
             return
         self.start_worker("Close Background Apps", self.task_slayer_action)

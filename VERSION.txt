@@ -1,2 +1,2 @@
-PC Optimizer v2.1
-Single Python app with embedded optimizer actions, customer-friendly UI text, fixed 3D buttons, validation, and app icon.
+PC Optimizer v2
+Single Python app with embedded optimizer actions, cleaner customer-facing UI, 3D buttons, validation, expanded student app closing list, and app icon.
