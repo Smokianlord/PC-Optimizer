@@ -1,0 +1,2 @@
+PC Optimizer v2.0
+Single Python app with embedded optimizer actions, 3D buttons, validation, and app icon.
