@@ -13,7 +13,7 @@ from tkinter import messagebox, ttk
 
 import optimizer_core as core
 
-VERSION = "3.3"
+VERSION = "3.0.0"
 BG = "#0B1120"
 PANEL = "#131F33"
 PANEL_ALT = "#192940"
@@ -87,7 +87,7 @@ class App:
         sidebar.pack_propagate(False)
         tk.Label(sidebar, text="◈  PC OPTIMIZER", bg="#0E192B", fg=TEXT,
                  font=("Segoe UI", 15, "bold"), anchor="w").pack(fill="x", padx=20, pady=(28, 4))
-        tk.Label(sidebar, text="CONTROL CENTER  /  V3.3", bg="#0E192B", fg=BLUE,
+        tk.Label(sidebar, text="CONTROL CENTER  /  V3.0.0", bg="#0E192B", fg=BLUE,
                  font=("Segoe UI", 8, "bold"), anchor="w").pack(fill="x", padx=20, pady=(0, 32))
         for label, symbol in (("Dashboard", "▦"), ("App Manager", "▣"),
                               ("Maintenance", "✦")):

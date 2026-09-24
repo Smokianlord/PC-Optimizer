@@ -19,8 +19,7 @@ WINDOWS_PROCESSES = {
     "explorer.exe", "taskmgr.exe", "searchhost.exe", "searchapp.exe",
     "startmenuexperiencehost.exe", "shellexperiencehost.exe", "runtimebroker.exe",
     "fontdrvhost.exe", "audiodg.exe", "spoolsv.exe", "conhost.exe",
-    "pc optimizer.exe", "pc optimizer v2.exe", "pc optimizer v2.1.exe",
-    "pc optimizer v3.exe", "python.exe", "pythonw.exe",
+    "pc optimizer v3.0.0.exe", "python.exe", "pythonw.exe",
     "defendersessionhelper.exe", "msmpeng.exe", "nissrv.exe",
 }
 WINDOWS_HOSTS = {

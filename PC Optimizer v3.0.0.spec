@@ -1,11 +1,10 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-
 a = Analysis(
-    ['Ultimate System Tuner.py'],
+    ['pc_optimizer_app.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('app_icon.ico', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -15,14 +14,10 @@ a = Analysis(
     optimize=0,
 )
 pyz = PYZ(a.pure)
-
 exe = EXE(
-    pyz,
-    a.scripts,
-    a.binaries,
-    a.datas,
-    [],
-    name='Ultimate System Tuner',
+    pyz, a.scripts, a.binaries, a.datas, [],
+    name='PC Optimizer v3.0.0',
+    version='version_info.txt',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -35,4 +30,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=['app_icon.ico'],
 )

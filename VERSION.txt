@@ -1,2 +1,2 @@
-PC Optimizer v3.3
-Exclude service-managed and Windows-hosted helpers from app closing; separate quick network refresh from restart-required stack repair.
+PC Optimizer v3.0.0
+Dashboard, app manager, live activity log, maintenance tools, service-managed helper filtering, and distinct quick and deep network actions.

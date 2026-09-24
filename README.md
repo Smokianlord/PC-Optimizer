@@ -1,6 +1,6 @@
-# PC Optimizer 3.3
+# PC Optimizer 3.0.0
 
-PC Optimizer 3.3 is a Windows desktop control center built with Python and Tkinter. It has a Dashboard, App Manager, Maintenance page, and live activity log visible throughout the app.
+PC Optimizer 3.0.0 is a Windows desktop control center built with Python and Tkinter. It has a Dashboard, App Manager, Maintenance page, and live activity log visible throughout the app.
 
 ## Features
 
@@ -27,7 +27,7 @@ python pc_optimizer_app.py
 
 ```powershell
 python -m pip install -r requirements.txt
-python -m PyInstaller --noconfirm "PC Optimizer v3.3.spec"
+python -m PyInstaller --noconfirm "PC Optimizer v3.0.0.spec"
 ```
 
-The Windows executable is produced at `dist/PC Optimizer v3.3.exe`.
+The Windows executable is produced at `dist/PC Optimizer v3.0.0.exe`.
