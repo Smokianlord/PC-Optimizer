@@ -1,2 +1,2 @@
-PC Optimizer v2
-Single Python app with embedded optimizer actions, cleaner customer-facing UI, 3D buttons, validation, expanded student app closing list, and app icon.
+PC Optimizer v3.3
+Exclude service-managed and Windows-hosted helpers from app closing; separate quick network refresh from restart-required stack repair.

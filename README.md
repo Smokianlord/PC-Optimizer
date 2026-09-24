@@ -1,154 +1,33 @@
-# PC Optimizer v2
+# PC Optimizer 3.3
 
-<p align="center">
-  <img width="900" alt="PC Optimizer v2" src="https://github.com/user-attachments/assets/07fd9718-d8c6-49f9-aadf-59889cfc845b" />
-</p>
-
-PC Optimizer v2 is a single Windows desktop app built with Python.
-
-It brings useful PC maintenance commands into one clean app with clickable buttons, validation checks, administrator support, and a custom app icon.
-
-This version replaces the old separate batch-file workflow with one simple app.
-
----
+PC Optimizer 3.3 is a Windows desktop control center built with Python and Tkinter. It has a Dashboard, App Manager, Maintenance page, and live activity log visible throughout the app.
 
 ## Features
 
-- Single Windows desktop app
-- Clean temporary files
-- Reset internet/network settings
-- Repair Windows system files
-- Close unnecessary background apps
-- Check system requirements before running important actions
-- Run full optimization sequence from one button
-- Customer-friendly interface
-- 3D-style buttons
-- Custom app icon
-- Administrator restart option
+- View available memory, free disk space, and the number of running user apps.
+- Search running non-Windows apps, select rows directly, or use Select all and Deselect all before closing.
+- Show standalone apps in the current desktop session, excluding Windows-hosted and service-managed helpers that automatically restart.
+- Report apps that exited before their close request separately from apps Windows could not close.
+- Clean the current user's Temp folder and Windows Temp. Locked items are skipped.
+- Refresh DNS and DHCP without a restart, or choose a separate Winsock/TCP repair that requires a Windows restart.
+- Repair Windows with DISM RestoreHealth and SFC.
+- Run cleanup, quick network refresh, and Windows repair in sequence.
+- Read, copy, or clear the activity log without leaving the current page.
+- Report a partial TCP/IP reset clearly if Windows denies a protected setting after other settings succeed.
 
----
+Maintenance changes require administrator access and confirmation. Closing selected apps can discard unsaved work. The app never closes apps automatically as part of full maintenance.
 
-## Main Functions
+## Run from source
 
-### Clean Temporary Files
-
-Removes unnecessary temporary files from common Windows locations such as:
-
-- Windows Temp
-- User Temp
-- Prefetch
-
-This can help free storage space and reduce unnecessary system clutter.
-
----
-
-### Reset Internet Connection
-
-Helps fix common internet and network issues by resetting important Windows network settings.
-
-Includes actions such as:
-
-- Flush DNS
-- Renew IP
-- Reset Winsock
-- Reset TCP/IP settings
-
----
-
-### Repair Windows System
-
-Runs Windows system repair commands to check and fix system file problems.
-
-Includes support for:
-
-- DISM health repair
-- System File Checker
-- Disk check command
-
----
-
-### Close Background Apps
-
-Closes common unnecessary background apps to help free CPU and RAM.
-
-Useful before:
-
-- Gaming
-- Studying
-- Online classes
-- Editing
-- Running heavy software
-- Coding
-- Engineering simulation work
-
-The app supports many common apps used by general users, CSE students, BBA students, and EEE / Engineering students.
-
-Examples include browsers, office apps, coding tools, engineering tools, launchers, communication apps, and other background-heavy software.
-
----
-
-### Check Requirements
-
-Checks important requirements before running maintenance actions, such as:
-
-- Windows compatibility
-- Administrator permission
-- Required system commands
-- Safe path validation
-
----
-
-### Run Full Optimization
-
-Runs the main optimization actions in sequence from one button.
-
----
-
-## Download
-
-Go to the **Releases** section of this repository and download:
-
-```txt
-PC Optimizer v2.exe
+```powershell
+python pc_optimizer_app.py
 ```
 
-For normal users, this is the only file needed.
+## Build
 
----
-
-## Important Note
-
-Some features require Administrator permission.
-
-For best results, right-click the app and choose:
-
-```txt
-Run as administrator
+```powershell
+python -m pip install -r requirements.txt
+python -m PyInstaller --noconfirm "PC Optimizer v3.3.spec"
 ```
 
-Without Administrator permission, cleanup, repair, reset, and background app closing features may not work fully.
-
-Please save your work before running cleanup, repair, reset, or app-closing actions.
-
----
-
-
-## Safety
-
-PC Optimizer v2 uses common Windows maintenance commands.
-
-The app includes confirmation prompts and validation checks before important actions. Still, users should save their work before running cleanup, repair, reset, or app-closing functions.
-
----
-
-## Version
-
-```txt
-PC Optimizer v2
-```
-
----
-
-## License
-
-This project is made for personal Windows maintenance and learning purposes.
+The Windows executable is produced at `dist/PC Optimizer v3.3.exe`.

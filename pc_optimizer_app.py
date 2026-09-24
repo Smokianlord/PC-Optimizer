@@ -1,850 +1,430 @@
-"""
-PC Optimizer - Single Python App
-
-Features converted from the original batch files:
-1. Delete Temp Files
-2. Network Reset Utility
-3. System Health Check
-4. Task Slayer
-5. Run All Tasks
-
-Build command:
-    py -m PyInstaller --onefile --windowed --name "PC Optimizer" --icon app_icon.ico --add-data "app_icon.ico;." pc_optimizer_app.py
-"""
-
+"""PC Optimizer 3: Windows maintenance dashboard."""
 from __future__ import annotations
 
 import ctypes
 import os
+from pathlib import Path
 import queue
 import shutil
-import subprocess
 import sys
-import tempfile
 import threading
-import time
-from pathlib import Path
-from typing import Callable, Iterable
-
 import tkinter as tk
-from tkinter import messagebox
-from tkinter import scrolledtext
+from tkinter import messagebox, ttk
+
+import optimizer_core as core
+
+VERSION = "3.3"
+BG = "#0B1120"
+PANEL = "#131F33"
+PANEL_ALT = "#192940"
+LINE = "#29405B"
+TEXT = "#ECF4FF"
+MUTED = "#9CB1C9"
+BLUE = "#35A7FF"
+GREEN = "#39D6A1"
+AMBER = "#FFBE62"
+RED = "#FF6D79"
 
 
-APP_NAME = "PC Optimizer"
-APP_VERSION = "2"
-WINDOW_WIDTH = 1040
-WINDOW_HEIGHT = 780
+def resource_path(name: str) -> Path:
+    return Path(getattr(sys, "_MEIPASS", Path(__file__).parent)) / name
 
 
-# -----------------------------
-# Windows/admin helpers
-# -----------------------------
+def memory_summary() -> str:
+    class MemoryStatus(ctypes.Structure):
+        _fields_ = [("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong), ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong), ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong), ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+    data = MemoryStatus()
+    data.dwLength = ctypes.sizeof(data)
+    if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(data)):
+        return f"{data.ullAvailPhys / 2**30:.1f} GB available"
+    return "Unavailable"
 
 
-def is_windows() -> bool:
-    return os.name == "nt"
-
-
-def is_admin() -> bool:
-    if not is_windows():
-        return False
-    try:
-        return bool(ctypes.windll.shell32.IsUserAnAdmin())
-    except Exception:
-        return False
-
-
-def quote_arg(value: str) -> str:
-    if not value:
-        return '""'
-    if any(ch in value for ch in ' \t"'):
-        return '"' + value.replace('"', '\\"') + '"'
-    return value
-
-
-def relaunch_as_admin() -> bool:
-    """Relaunch the current app with elevated privileges."""
-    if not is_windows():
-        return False
-
-    try:
-        if getattr(sys, "frozen", False):
-            executable = sys.executable
-            params = subprocess.list2cmdline(sys.argv[1:])
-        else:
-            executable = sys.executable
-            script = str(Path(__file__).resolve())
-            params = subprocess.list2cmdline([script, *sys.argv[1:]])
-
-        result = ctypes.windll.shell32.ShellExecuteW(None, "runas", executable, params, None, 1)
-        return int(result) > 32
-    except Exception:
-        return False
-
-
-def resource_path(relative_path: str) -> Path:
-    base_path = getattr(sys, "_MEIPASS", None)
-    if base_path:
-        return Path(base_path) / relative_path
-    return Path(__file__).resolve().parent / relative_path
-
-
-def command_exists(command: str) -> bool:
-    if shutil.which(command):
-        return True
-    if not is_windows():
-        return False
-
-    system_root = Path(os.environ.get("SystemRoot", r"C:\Windows"))
-    candidates = [
-        system_root / "System32" / command,
-        system_root / "System32" / f"{command}.exe",
-        system_root / "Sysnative" / command,
-        system_root / "Sysnative" / f"{command}.exe",
-        system_root / "System32" / "WindowsPowerShell" / "v1.0" / command,
-        system_root / "System32" / "WindowsPowerShell" / "v1.0" / f"{command}.exe",
-    ]
-    return any(path.exists() for path in candidates)
-
-
-def create_no_window_flag() -> int:
-    if is_windows():
-        return getattr(subprocess, "CREATE_NO_WINDOW", 0)
-    return 0
-
-
-# -----------------------------
-# Optimizer command data
-# -----------------------------
-
-TASK_SLAYER_GROUPS: dict[str, list[str]] = {
-    "Browsers": [
-        "chrome.exe", "msedge.exe", "brave.exe", "firefox.exe", "opera.exe", "opera_gx.exe",
-        "vivaldi.exe", "browser.exe", "Arc.exe", "MicrosoftEdgeUpdate.exe",
-    ],
-    "Gaming and Steam": [
-        "steam.exe", "steamwebhelper.exe", "steamservice.exe", "steam_bootstrapper.exe",
-        "steamvr.exe", "Steam Desktop Authenticator.exe",
-    ],
-    "Xbox and Gaming Services": [
-        "XboxPcTray.exe", "XboxPcAppFT.exe", "Xbox.exe", "gamingservicesnet.exe", "gamingservices.exe",
-    ],
-    "File Sharing and Cloud Services": [
-        "shareit.exe", "shareitservice.exe", "googledrivesync.exe", "GoogleDriveFS.exe",
-        "OneDrive.exe", "Dropbox.exe", "MEGAsync.exe", "iCloudDrive.exe", "iCloudPhotos.exe",
-    ],
-    "Communication and Meeting Apps": [
-        "discord.exe", "WhatsApp.exe", "Telegram.exe", "Signal.exe", "Skype.exe",
-        "Teams.exe", "ms-teams.exe", "Zoom.exe", "slack.exe",
-    ],
-    "Cloudflare WARP": [
-        "warp.exe", "warp-svc.exe", "cloudflare-warp.exe", "CloudflareWARP.exe", "WARPClient.exe",
-    ],
-    "WeMod": ["WeMod.exe", "WeModHelper.exe", "WeModAuxiliaryService.exe"],
-    "CurseForge and Overwolf": ["CurseForge.exe", "Curse.Agent.Host.exe", "Overwolf.exe"],
-    "TcNo Account Switcher": ["TcNo-Acc-Switcher-Tray_main.exe", "TcNo-Acc-Switcher_main.exe"],
-    "Spotify": ["Spotify.exe", "SpotifyWebHelper.exe"],
-    "System Utilities": [
-        "AvroKeyboard.exe", "AvroSetup.exe", "Avro.exe", "CCleaner64.exe", "CCleaner.exe",
-        "CCleanerSmartClean.exe", "CCXProcess.exe", "CCleanerPerformanceOptimizerService.exe",
-        "AdobeIPCBroker.exe", "crashpad_handler.exe", "BraveCrashHandler64.exe",
-        "BraveCrashHandler.exe", "BraveUpdate.exe", "Taskmgr.exe",
-    ],
-    "Torrent and Download Managers": ["qbittorrent.exe", "IDMan.exe"],
-    "Background Services": [
-        "wallpaper32.exe", "winrtutil32.exe", "wmpnetwk.exe", "NewsAndInterests.exe", "node.exe", "SearchApp.exe",
-    ],
-    "CSE Student Tools": [
-        "Code.exe", "Cursor.exe", "Windsurf.exe", "VSCodium.exe", "GitHubDesktop.exe",
-        "pycharm64.exe", "pycharm.exe", "idea64.exe", "idea.exe", "webstorm64.exe", "webstorm.exe",
-        "studio64.exe", "adb.exe", "emulator.exe", "qemu-system-x86_64.exe",
-        "Docker Desktop.exe", "Docker Desktop Backend.exe", "com.docker.backend.exe", "com.docker.service.exe",
-        "postman.exe", "Insomnia.exe", "xampp-control.exe", "httpd.exe", "mysqld.exe",
-        "python.exe", "pythonw.exe", "java.exe", "javaw.exe", "dotnet.exe", "node.exe",
-    ],
-    "BBA and Office Student Tools": [
-        "WINWORD.EXE", "EXCEL.EXE", "POWERPNT.EXE", "MSACCESS.EXE", "OUTLOOK.EXE",
-        "ONENOTE.EXE", "Acrobat.exe", "FoxitPDFReader.exe", "WPSOffice.exe", "wps.exe",
-        "Notion.exe", "Obsidian.exe", "Mendeley Desktop.exe", "Zotero.exe",
-    ],
-    "EEE and Engineering Student Tools": [
-        "MATLAB.exe", "ltspice.exe", "scad3.exe", "multisim.exe", "Ultiboard.exe",
-        "ISIS.EXE", "ARES.EXE", "Proteus.exe", "kicad.exe", "eeschema.exe", "pcbnew.exe",
-        "eagle.exe", "Fusion360.exe", "acad.exe", "SLDWORKS.exe", "CodeBlocks.exe",
-    ],
-    "Network and Remote Tools": ["DnsJumper.exe", "AnyDesk.exe", "TeamViewer.exe", "RustDesk.exe"],
-    "Phone Link": ["PhoneLink.exe", "PhoneExperienceHost.exe", "YourPhone.exe", "YourPhoneApp.exe"],
-    "Adobe and Related Services": [
-        "AdobeCollabSync.exe", "acrotray.exe", "armsvc.exe", "AGMService.exe",
-        "Photoshop.exe", "Illustrator.exe", "AfterFX.exe", "Premiere Pro.exe", "Lightroom.exe",
-        "Adobe Desktop Service.exe", "Creative Cloud.exe", "CoreSync.exe",
-    ],
-    "Canva and Figma": ["Canva.exe", "Figma.exe", "figma_agent.exe"],
-    "CCleaner Performance Optimizer": ["CCleanerPerformanceOptimizerService.exe"],
-}
-
-FEATURE_COMMANDS: dict[str, list[str]] = {
-    "Clean Temporary Files": [],
-    "Reset Internet Connection": ["ipconfig", "netsh", "powershell"],
-    "Repair Windows System": ["DISM", "SFC", "chkdsk"],
-    "Close Background Apps": ["taskkill"],
-}
-
-
-# -----------------------------
-# UI widgets
-# -----------------------------
-
-
-def clamp(value: int) -> int:
-    return max(0, min(255, value))
-
-
-def adjust_hex_color(hex_color: str, amount: int) -> str:
-    hex_color = hex_color.strip("#")
-    r = clamp(int(hex_color[0:2], 16) + amount)
-    g = clamp(int(hex_color[2:4], 16) + amount)
-    b = clamp(int(hex_color[4:6], 16) + amount)
-    return f"#{r:02x}{g:02x}{b:02x}"
-
-
-class ThreeDButton(tk.Canvas):
-    """Canvas based raised button with shadow, hover, click depth, and safe text spacing."""
-
-    def __init__(
-        self,
-        master: tk.Widget,
-        title: str,
-        subtitle: str,
-        command: Callable[[], None],
-        width: int = 300,
-        height: int = 96,
-        color: str = "#2f80ed",
-        accent: str = "C",
-        text_color: str = "#ffffff",
-        **kwargs,
-    ) -> None:
-        super().__init__(
-            master,
-            width=width,
-            height=height,
-            bg=kwargs.pop("bg", "#0b1220"),
-            highlightthickness=0,
-            bd=0,
-            cursor="hand2",
-            **kwargs,
-        )
-        self.title = title
-        self.subtitle = subtitle
-        self.command = command
-        self.width_value = width
-        self.height_value = height
-        self.color = color
-        self.accent = accent
-        self.text_color = text_color
-        self.hovered = False
-        self.pressed = False
-        self.enabled = True
-        self.draw()
-        self.bind("<Enter>", self.on_enter)
-        self.bind("<Leave>", self.on_leave)
-        self.bind("<ButtonPress-1>", self.on_press)
-        self.bind("<ButtonRelease-1>", self.on_release)
-
-    def rounded_rect(self, x1: int, y1: int, x2: int, y2: int, r: int, **kwargs) -> None:
-        points = [
-            x1 + r, y1, x2 - r, y1, x2, y1, x2, y1 + r,
-            x2, y2 - r, x2, y2, x2 - r, y2, x1 + r, y2,
-            x1, y2, x1, y2 - r, x1, y1 + r, x1, y1,
-        ]
-        self.create_polygon(points, smooth=True, **kwargs)
-
-    def draw(self) -> None:
-        self.delete("all")
-        offset = 8 if not self.pressed else 3
-        body_y = 6 if not self.pressed else 11
-        base = self.color
-        if not self.enabled:
-            base = "#64748b"
-        elif self.hovered:
-            base = adjust_hex_color(base, 16)
-
-        dark = adjust_hex_color(base, -58)
-        light = adjust_hex_color(base, 30)
-        shadow = "#020617"
-        w = self.width_value
-        h = self.height_value
-
-        # Raised 3D base and shadow.
-        self.rounded_rect(10, 14 + offset, w - 8, h - 4 + offset, 16, fill=shadow, outline="")
-        self.rounded_rect(8, body_y + 6, w - 10, h - 15, 16, fill=dark, outline="")
-        self.rounded_rect(8, body_y, w - 10, h - 22, 16, fill=base, outline=light, width=2)
-
-        # Small left badge gives each action a clear visual anchor without using emoji fonts.
-        self.create_oval(24, body_y + 20, 54, body_y + 50, fill="#ffffff", outline="")
-        self.create_text(
-            39,
-            body_y + 35,
-            text=self.accent,
-            anchor="center",
-            font=("Segoe UI", 11, "bold"),
-            fill=base,
-        )
-
-        self.create_text(
-            66,
-            body_y + 25,
-            text=self.title,
-            anchor="w",
-            font=("Segoe UI", 12, "bold"),
-            fill=self.text_color,
-        )
-        self.create_text(
-            66,
-            body_y + 53,
-            text=self.subtitle,
-            anchor="w",
-            font=("Segoe UI", 9),
-            fill="#edf6ff",
-            width=w - 86,
-        )
-
-    def on_enter(self, _event: tk.Event) -> None:
-        if not self.enabled:
-            return
-        self.hovered = True
-        self.draw()
-
-    def on_leave(self, _event: tk.Event) -> None:
-        if not self.enabled:
-            return
-        self.hovered = False
-        self.pressed = False
-        self.draw()
-
-    def on_press(self, _event: tk.Event) -> None:
-        if not self.enabled:
-            return
-        self.pressed = True
-        self.draw()
-
-    def on_release(self, event: tk.Event) -> None:
-        if not self.enabled:
-            return
-        inside = 0 <= event.x <= self.width_value and 0 <= event.y <= self.height_value
-        self.pressed = False
-        self.draw()
-        if inside:
-            self.command()
-
-    def set_enabled(self, enabled: bool) -> None:
-        self.enabled = enabled
-        self.config(cursor="hand2" if enabled else "arrow")
-        self.draw()
-
-
-# -----------------------------
-# Main app
-# -----------------------------
-
-
-class PCOptimizerApp:
+class App:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
-        self.log_queue: queue.Queue[str] = queue.Queue()
-        self.worker: threading.Thread | None = None
-        self.buttons: list[ThreeDButton] = []
-
-        self.root.title(f"{APP_NAME} v{APP_VERSION}")
-        self.root.geometry(f"{WINDOW_WIDTH}x{WINDOW_HEIGHT}")
-        self.root.minsize(980, 720)
-        self.root.configure(bg="#0b1220")
-
-        icon_file = resource_path("app_icon.ico")
-        if icon_file.exists() and is_windows():
+        self.root.title(f"PC Optimizer {VERSION}")
+        self.root.geometry("1220x790")
+        self.root.minsize(1050, 690)
+        self.root.configure(bg=BG)
+        icon = resource_path("app_icon.ico")
+        if icon.exists():
             try:
-                self.root.iconbitmap(str(icon_file))
-            except Exception:
+                self.root.iconbitmap(str(icon))
+            except tk.TclError:
                 pass
+        self.events: queue.Queue[tuple[str, object]] = queue.Queue()
+        self.busy = False
+        self.apps: dict[str, tuple[str, int, str]] = {}
+        self.selected_pids: set[str] = set()
+        self.nav: dict[str, tk.Button] = {}
+        self.current_page = "Dashboard"
+        self._make_shell()
+        self.show("Dashboard")
+        self.root.after(100, self._drain)
+        self.root.after(250, self.refresh)
 
-        self.build_ui()
-        self.root.after(80, self.process_log_queue)
-        self.write_startup_status()
+    def _button(self, parent: tk.Widget, label: str, command, *, primary=False, danger=False) -> tk.Button:
+        color = RED if danger else BLUE if primary else PANEL_ALT
+        return tk.Button(parent, text=label, command=command, bg=color,
+                         fg="#071321" if primary else TEXT,
+                         activebackground="#69BCFF" if primary else "#315071",
+                         activeforeground=TEXT, relief="flat", bd=0,
+                         font=("Segoe UI", 10, "bold"), padx=15, pady=9,
+                         cursor="hand2")
 
-    def build_ui(self) -> None:
-        shell = tk.Frame(self.root, bg="#0b1220")
-        shell.pack(fill="both", expand=True, padx=26, pady=20)
+    def _label(self, parent: tk.Widget, text: str, *, size=10, color=TEXT, bold=False, bg=PANEL) -> tk.Label:
+        return tk.Label(parent, text=text, bg=bg, fg=color,
+                        font=("Segoe UI", size, "bold" if bold else "normal"), anchor="w")
 
-        header = tk.Frame(shell, bg="#0b1220")
-        header.pack(fill="x")
+    def _make_shell(self) -> None:
+        sidebar = tk.Frame(self.root, bg="#0E192B", width=225)
+        sidebar.pack(side="left", fill="y")
+        sidebar.pack_propagate(False)
+        tk.Label(sidebar, text="◈  PC OPTIMIZER", bg="#0E192B", fg=TEXT,
+                 font=("Segoe UI", 15, "bold"), anchor="w").pack(fill="x", padx=20, pady=(28, 4))
+        tk.Label(sidebar, text="CONTROL CENTER  /  V3.3", bg="#0E192B", fg=BLUE,
+                 font=("Segoe UI", 8, "bold"), anchor="w").pack(fill="x", padx=20, pady=(0, 32))
+        for label, symbol in (("Dashboard", "▦"), ("App Manager", "▣"),
+                              ("Maintenance", "✦")):
+            button = tk.Button(sidebar, text=f"{symbol}   {label}", command=lambda page=label: self.show(page),
+                               bg="#0E192B", fg=MUTED, activebackground=PANEL_ALT,
+                               activeforeground=TEXT, anchor="w", relief="flat", bd=0,
+                               font=("Segoe UI", 11, "bold"), padx=20, pady=14,
+                               cursor="hand2")
+            button.pack(fill="x", padx=9, pady=3)
+            self.nav[label] = button
+        self._label(sidebar, "LOCAL WINDOWS TOOLS", size=8, color=MUTED, bg="#0E192B").pack(side="bottom", padx=20, pady=24)
 
-        title_area = tk.Frame(header, bg="#0b1220")
-        title_area.pack(side="left", fill="x", expand=True)
+        main = tk.Frame(self.root, bg=BG)
+        main.pack(side="left", fill="both", expand=True)
+        top = tk.Frame(main, bg=BG)
+        top.pack(fill="x", padx=28, pady=(23, 16))
+        self.heading = self._label(top, "Dashboard", size=24, bold=True, bg=BG)
+        self.heading.pack(side="left")
+        self._button(top, "Refresh", self.refresh).pack(side="right", padx=(8, 0))
+        self.admin_button = self._button(top, "Run as admin", self.request_admin)
+        self.admin_button.pack(side="right")
+        self.admin_chip = self._label(top, "", size=9, color=GREEN, bold=True, bg=BG)
+        self.admin_chip.pack(side="right", padx=18)
+        self.content = tk.Frame(main, bg=BG)
+        self.content.pack(fill="both", expand=True, padx=28)
+        self._log_dock(main)
+        footer = tk.Frame(main, bg=BG)
+        footer.pack(fill="x", padx=28, pady=(10, 17))
+        self.status = self._label(footer, "Ready", size=9, color=MUTED, bg=BG)
+        self.status.pack(side="left")
+        self._label(footer, "Actions run only after confirmation", size=9, color=MUTED, bg=BG).pack(side="right")
 
-        tk.Label(
-            title_area,
-            text="PC Optimizer",
-            bg="#0b1220",
-            fg="#f8fafc",
-            font=("Segoe UI", 26, "bold"),
-        ).pack(anchor="w")
+    def _clear_content(self) -> None:
+        for child in self.content.winfo_children():
+            child.destroy()
 
-        tk.Label(
-            title_area,
-            text="A simple control panel for your PC cleanup, repair, network reset, and app closing tools.",
-            bg="#0b1220",
-            fg="#9fb3d1",
-            font=("Segoe UI", 10),
-        ).pack(anchor="w", pady=(2, 0))
+    def show(self, page: str) -> None:
+        self.current_page = page
+        self.heading.configure(text=page)
+        for label, button in self.nav.items():
+            button.configure(bg=PANEL_ALT if label == page else "#0E192B",
+                             fg=TEXT if label == page else MUTED)
+        self._clear_content()
+        {"Dashboard": self._dashboard, "App Manager": self._app_manager,
+         "Maintenance": self._maintenance}[page]()
 
-        action_area = tk.Frame(header, bg="#0b1220")
-        action_area.pack(side="right", anchor="ne")
+    def _log_dock(self, parent: tk.Widget) -> None:
+        dock = tk.Frame(parent, bg=BG)
+        dock.pack(fill="x", padx=28, pady=(9, 0))
+        header = tk.Frame(dock, bg=BG)
+        header.pack(fill="x", pady=(0, 7))
+        self._label(header, "LIVE ACTIVITY", size=10, color=MUTED, bold=True, bg=BG).pack(side="left")
+        self._button(header, "Copy", self.copy_log).pack(side="right", padx=(7, 0))
+        self._button(header, "Clear", self.clear_log).pack(side="right")
+        box = tk.Frame(dock, bg=PANEL, highlightbackground=LINE, highlightthickness=1)
+        box.pack(fill="x")
+        self.log_box = tk.Text(box, height=7, bg=PANEL, fg="#CEE2F6", insertbackground=TEXT,
+                               font=("Consolas", 9), relief="flat", padx=12, pady=9,
+                               wrap="word", state="disabled")
+        scroll = ttk.Scrollbar(box, orient="vertical", command=self.log_box.yview)
+        self.log_box.configure(yscrollcommand=scroll.set)
+        self.log_box.pack(side="left", fill="x", expand=True)
+        scroll.pack(side="right", fill="y")
 
-        self.admin_button = tk.Button(
-            action_area,
-            text="Open as Administrator",
-            command=self.request_admin,
-            bg="#f97316",
-            fg="#ffffff",
-            activebackground="#fb923c",
-            activeforeground="#ffffff",
-            relief="raised",
-            bd=4,
-            font=("Segoe UI", 10, "bold"),
-            padx=12,
-            pady=6,
-        )
-        self.admin_button.pack(side="left", padx=(0, 10))
-        if is_admin():
-            self.admin_button.configure(state="disabled", text="Administrator Active")
+    def _card(self, parent: tk.Widget, title: str, subtitle: str = "") -> tk.Frame:
+        card = tk.Frame(parent, bg=PANEL, highlightbackground=LINE, highlightthickness=1)
+        self._label(card, title, size=14, bold=True).pack(anchor="w", padx=18, pady=(16, 3))
+        if subtitle:
+            self._label(card, subtitle, size=9, color=MUTED).pack(anchor="w", padx=18, pady=(0, 12))
+        return card
 
-        self.admin_badge = tk.Label(
-            action_area,
-            text="ADMIN MODE" if is_admin() else "STANDARD MODE",
-            bg="#14532d" if is_admin() else "#92400e",
-            fg="#ffffff",
-            font=("Segoe UI", 10, "bold"),
-            padx=13,
-            pady=9,
-        )
-        self.admin_badge.pack(side="left")
-
-        button_area = tk.Frame(shell, bg="#0b1220")
-        button_area.pack(fill="x", pady=(18, 0))
-
-        specs = [
-            ("Clean Temporary Files", "Remove Windows cache and temp files", "#16a34a", "C", self.run_delete_temp),
-            ("Reset Internet Connection", "Flush DNS and reset network settings", "#2563eb", "N", self.run_network_reset),
-            ("Repair Windows System", "Run DISM, SFC, and disk check", "#7c3aed", "R", self.run_health_check),
-            ("Close Background Apps", "Stop common study and background apps", "#dc2626", "A", self.run_task_slayer),
-            ("Check Requirements", "Verify Windows, admin, and tools", "#0891b2", "V", self.run_validation),
-            ("Run Full Optimization", "Run every maintenance step in order", "#ea580c", "F", self.run_all_tasks),
-        ]
-
-        for index, (title, subtitle, color, accent, command) in enumerate(specs):
-            btn = ThreeDButton(
-                button_area,
-                title,
-                subtitle,
-                command,
-                width=300,
-                height=96,
-                color=color,
-                accent=accent,
-                bg="#0b1220",
-            )
-            row, col = divmod(index, 3)
-            btn.grid(row=row, column=col, padx=9, pady=9, sticky="nsew")
-            self.buttons.append(btn)
-
+    def _dashboard(self) -> None:
+        self._label(self.content, "A clear view of what you can safely review and run.",
+                    color=MUTED, bg=BG).pack(anchor="w", pady=(0, 18))
+        metrics = tk.Frame(self.content, bg=BG)
+        metrics.pack(fill="x")
         for col in range(3):
-            button_area.grid_columnconfigure(col, weight=1)
+            metrics.columnconfigure(col, weight=1, uniform="metric")
+        metric_data = (("MEMORY AVAILABLE", memory_summary(), GREEN),
+                       ("C: DRIVE FREE", self._disk_summary(), BLUE),
+                       ("RUNNING USER APPS", str(len(self.apps)), AMBER))
+        for col, (title, value, accent) in enumerate(metric_data):
+            card = tk.Frame(metrics, bg=PANEL, highlightbackground=LINE, highlightthickness=1)
+            card.grid(row=0, column=col, sticky="nsew", padx=(0, 10) if col < 2 else 0)
+            self._label(card, title, size=9, color=MUTED, bold=True).pack(anchor="w", padx=18, pady=(18, 5))
+            self._label(card, value, size=21, color=accent, bold=True).pack(anchor="w", padx=18, pady=(0, 18))
+        actions = tk.Frame(self.content, bg=BG)
+        actions.pack(fill="both", expand=True, pady=(20, 0))
+        actions.columnconfigure(0, weight=1, uniform="action")
+        actions.columnconfigure(1, weight=1, uniform="action")
+        cards = [
+            ("Manage running apps", "Review individual processes before closing anything.", "Open App Manager", lambda: self.show("App Manager")),
+            ("Clean temporary files", "Remove files from your Temp folder and Windows Temp.", "Review cleanup", lambda: self.run_action("Clean temporary files")),
+            ("Refresh connection", "Flush DNS and renew DHCP without a restart.", "Refresh network", lambda: self.run_action("Refresh network")),
+            ("Repair Windows", "Run DISM and System File Checker in sequence.", "Review repair", lambda: self.run_action("Repair Windows")),
+        ]
+        for index, (title, detail, label, command) in enumerate(cards):
+            card = self._card(actions, title, detail)
+            card.grid(row=index // 2, column=index % 2, sticky="nsew", padx=(0, 10) if index % 2 == 0 else 0,
+                      pady=(0, 10))
+            self._button(card, label, command, primary=index == 0).pack(anchor="w", padx=18, pady=(0, 17))
 
-        log_header = tk.Frame(shell, bg="#0b1220")
-        log_header.pack(fill="x", pady=(20, 7))
-        tk.Label(
-            log_header,
-            text="Activity Log",
-            bg="#0b1220",
-            fg="#f8fafc",
-            font=("Segoe UI", 14, "bold"),
-        ).pack(side="left")
-        tk.Button(
-            log_header,
-            text="Clear Log",
-            command=lambda: self.log_box.delete("1.0", "end"),
-            bg="#1f2937",
-            fg="#e5e7eb",
-            activebackground="#374151",
-            activeforeground="#ffffff",
-            relief="raised",
-            bd=3,
-            font=("Segoe UI", 9, "bold"),
-            padx=8,
-            pady=2,
-        ).pack(side="right")
+    def _disk_summary(self) -> str:
+        try:
+            return f"{shutil.disk_usage(os.environ.get('SystemDrive', 'C:') + os.sep).free / 2**30:.0f} GB"
+        except OSError:
+            return "Unavailable"
 
-        self.log_box = scrolledtext.ScrolledText(
-            shell,
-            height=17,
-            bg="#020617",
-            fg="#d1fae5",
-            insertbackground="#ffffff",
-            font=("Consolas", 10),
-            relief="flat",
-            bd=0,
-            padx=10,
-            pady=10,
-            wrap="word",
-        )
-        self.log_box.pack(fill="both", expand=True)
+    def _app_manager(self) -> None:
+        self._label(self.content, "Select desktop apps to close. Windows and service-managed helpers are excluded.",
+                    color=MUTED, bg=BG).pack(anchor="w", pady=(0, 10))
+        toolbar = tk.Frame(self.content, bg=BG)
+        toolbar.pack(fill="x", pady=(0, 12))
+        self.search_var = tk.StringVar()
+        self._label(toolbar, "Search", size=10, color=MUTED, bg=BG).pack(side="left", padx=(0, 10))
+        search = tk.Entry(toolbar, textvariable=self.search_var, bg=PANEL, fg=TEXT,
+                          insertbackground=TEXT, relief="flat", font=("Segoe UI", 11), bd=8)
+        search.pack(side="left", fill="x", expand=True)
+        self.search_var.trace_add("write", lambda *_: self._fill_apps())
+        self._button(toolbar, "Close selected", self.close_apps, danger=True).pack(side="right", padx=(8, 0))
+        self._button(toolbar, "Refresh list", self.refresh).pack(side="right", padx=(8, 0))
+        self._button(toolbar, "Deselect all", self.deselect_all).pack(side="right", padx=(8, 0))
+        self._button(toolbar, "Select all", self.select_all).pack(side="right", padx=(8, 0))
+        holder = tk.Frame(self.content, bg=PANEL, highlightbackground=LINE, highlightthickness=1)
+        holder.pack(fill="both", expand=True)
+        style = ttk.Style(self.root)
+        style.theme_use("clam")
+        style.configure("Apps.Treeview", background=PANEL, fieldbackground=PANEL, foreground=TEXT,
+                        rowheight=32, borderwidth=0, font=("Segoe UI", 10))
+        style.map("Apps.Treeview", background=[("selected", "#24598A")], foreground=[("selected", TEXT)])
+        style.configure("Apps.Treeview.Heading", background=PANEL_ALT, foreground=TEXT,
+                        font=("Segoe UI", 10, "bold"), relief="flat")
+        style.configure("Vertical.TScrollbar", background=PANEL_ALT, troughcolor=PANEL,
+                        bordercolor=PANEL, arrowcolor=TEXT)
+        self.tree = ttk.Treeview(holder, columns=("picked", "name", "pid", "path"), show="headings",
+                                 selectmode="none", style="Apps.Treeview")
+        for column, title, width in (("picked", "Select", 65), ("name", "Application", 250),
+                                     ("pid", "PID", 75), ("path", "Location", 520)):
+            self.tree.heading(column, text=title)
+            self.tree.column(column, width=width, anchor="w")
+        self.tree.bind("<Button-1>", self._toggle_app)
+        scroll = ttk.Scrollbar(holder, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scroll.set)
+        self.tree.pack(side="left", fill="both", expand=True)
+        scroll.pack(side="right", fill="y")
+        self._fill_apps()
+        self.selection_label = self._label(self.content, "", size=9, color=MUTED, bg=BG)
+        self.selection_label.pack(anchor="w", pady=(9, 0))
+        self._update_selection_label()
 
-        self.status_var = tk.StringVar(value="Ready")
-        status = tk.Label(
-            shell,
-            textvariable=self.status_var,
-            bg="#0b1220",
-            fg="#94a3b8",
-            font=("Segoe UI", 9),
-            anchor="w",
-        )
-        status.pack(fill="x", pady=(8, 0))
-
-    def write_startup_status(self) -> None:
-        self.log(f"{APP_NAME} v{APP_VERSION} is ready.")
-        if not is_windows():
-            self.log("This app is designed for Windows. Open it on Windows to run the optimizer tools.")
+    def _fill_apps(self) -> None:
+        if not hasattr(self, "tree") or not self.tree.winfo_exists():
             return
-        if is_admin():
-            self.log("Mode: Administrator. All optimizer actions are available.")
+        term = self.search_var.get().lower().strip()
+        self.tree.delete(*self.tree.get_children())
+        for key, (name, pid, path) in self.apps.items():
+            if term and term not in name.lower() and term not in path.lower():
+                continue
+            picked = "☑" if key in self.selected_pids else "☐"
+            self.tree.insert("", "end", iid=key, values=(picked, name, pid, path))
+        self._update_selection_label()
+
+    def _toggle_app(self, event: tk.Event) -> str | None:
+        if self.tree.identify_region(event.x, event.y) != "cell":
+            return None
+        key = self.tree.identify_row(event.y)
+        if not key:
+            return None
+        if key in self.selected_pids:
+            self.selected_pids.remove(key)
         else:
-            self.log("Mode: Standard. Click 'Open as Administrator' before running optimizer actions.")
+            self.selected_pids.add(key)
+        self.tree.set(key, "picked", "☑" if key in self.selected_pids else "☐")
+        self._update_selection_label()
+        return "break"
+
+    def select_all(self) -> None:
+        self.selected_pids.update(self.tree.get_children())
+        self._fill_apps()
+
+    def deselect_all(self) -> None:
+        self.selected_pids.clear()
+        self._fill_apps()
+
+    def _update_selection_label(self) -> None:
+        if hasattr(self, "selection_label") and self.selection_label.winfo_exists():
+            self.selection_label.configure(text=f"{len(self.selected_pids)} selected  •  Click any row to toggle  •  Save work before closing")
+
+    def _maintenance(self) -> None:
+        self._label(self.content, "Choose a specific repair task. Administrator access is required for system changes.",
+                    color=MUTED, bg=BG).pack(anchor="w", pady=(0, 16))
+        tasks = [
+            ("Clean temporary files", "Current-user and Windows Temp only. Locked files are skipped."),
+            ("Refresh network", "Flush DNS and renew DHCP. No restart required."),
+            ("Repair network stack", "Reset Winsock and TCP/IP. Windows requires a restart afterward."),
+            ("Repair Windows", "Run DISM RestoreHealth and SFC. This can take a while."),
+            ("Run full maintenance", "Run cleanup, quick network refresh, and Windows repair."),
+        ]
+        for title, detail in tasks:
+            row = tk.Frame(self.content, bg=PANEL, highlightbackground=LINE, highlightthickness=1)
+            row.pack(fill="x", pady=(0, 11))
+            self._button(row, "Run", lambda task=title: self.run_action(task), primary=True).pack(side="right", padx=16, pady=13)
+            self._label(row, title, size=13, bold=True).pack(anchor="w", padx=18, pady=(13, 2))
+            self._label(row, detail, size=9, color=MUTED).pack(anchor="w", padx=18, pady=(0, 14))
 
     def log(self, message: str) -> None:
-        timestamp = time.strftime("%H:%M:%S")
-        self.log_queue.put(f"[{timestamp}] {message}\n")
+        self.events.put(("log", message))
 
-    def process_log_queue(self) -> None:
+    def _drain(self) -> None:
         try:
             while True:
-                message = self.log_queue.get_nowait()
-                self.log_box.insert("end", message)
-                self.log_box.see("end")
+                kind, payload = self.events.get_nowait()
+                if kind == "log":
+                    from datetime import datetime
+                    line = f"[{datetime.now():%H:%M:%S}] {payload}\n"
+                    self.log_lines = getattr(self, "log_lines", [])
+                    self.log_lines.append(line)
+                    if hasattr(self, "log_box") and self.log_box.winfo_exists():
+                        self.log_box.configure(state="normal")
+                        self.log_box.insert("end", line)
+                        self.log_box.see("end")
+                        self.log_box.configure(state="disabled")
+                elif kind == "done":
+                    self.busy = False
+                    self.refresh()
+                    self.status.configure(text=str(payload))
         except queue.Empty:
             pass
-        self.root.after(80, self.process_log_queue)
+        self.root.after(100, self._drain)
 
-    def set_busy(self, busy: bool, status: str = "Ready") -> None:
-        for button in self.buttons:
-            button.set_enabled(not busy)
-        self.status_var.set(status)
-        if busy:
-            self.admin_button.configure(state="disabled")
-        else:
-            self.admin_button.configure(state="disabled" if is_admin() else "normal")
+    def refresh(self) -> None:
+        try:
+            self.apps = {str(pid): (name, pid, path) for name, pid, path in core.running_apps()}
+            self.selected_pids.intersection_update(self.apps)
+            self.status.configure(text=f"Ready  •  {len(self.apps)} user processes")
+        except Exception as exc:
+            self.log(f"App scan failed: {exc}")
+        self.admin_chip.configure(text="● ADMIN" if core.is_admin() else "● STANDARD",
+                                  fg=GREEN if core.is_admin() else AMBER)
+        self.admin_button.configure(state="disabled" if core.is_admin() else "normal")
+        if self.current_page == "Dashboard":
+            self.show("Dashboard")
+        elif self.current_page == "App Manager":
+            self._fill_apps()
 
     def request_admin(self) -> None:
-        if not is_windows():
-            messagebox.showerror("Windows required", "Administrator relaunch is only available on Windows.")
-            return
-        if relaunch_as_admin():
-            self.root.destroy()
-        else:
-            messagebox.showerror("Could not open as Administrator", "Windows did not start the app as Administrator.")
-
-    def require_ready(self, feature_name: str, commands: Iterable[str] | None = None) -> bool:
-        if not is_windows():
-            messagebox.showerror("Windows required", f"{feature_name} uses Windows maintenance commands.")
-            return False
-        if not is_admin():
-            answer = messagebox.askyesno(
-                "Administrator required",
-                f"{feature_name} needs Administrator permission. Open the app as Administrator now?",
-            )
-            if answer:
-                self.request_admin()
-            return False
-        missing = [cmd for cmd in (commands or []) if not command_exists(cmd)]
-        if missing:
-            messagebox.showerror(
-                "Validation failed",
-                "These required Windows tools were not found: " + ", ".join(missing),
-            )
-            return False
-        return True
-
-    def start_worker(self, title: str, target: Callable[[], None]) -> None:
-        if self.worker and self.worker.is_alive():
-            messagebox.showwarning("Please wait", "Another task is already running.")
-            return
-
-        def wrapper() -> None:
-            self.set_busy_threadsafe(True, f"Running: {title}")
-            self.log("=" * 72)
-            self.log(f"START: {title}")
-            try:
-                target()
-                self.log(f"DONE: {title}")
-            except Exception as exc:
-                self.log(f"ERROR: {exc}")
-                self.root.after(0, lambda: messagebox.showerror("Task failed", str(exc)))
-            finally:
-                self.log("=" * 72)
-                self.set_busy_threadsafe(False, "Ready")
-
-        self.worker = threading.Thread(target=wrapper, daemon=True)
-        self.worker.start()
-
-    def set_busy_threadsafe(self, busy: bool, status: str) -> None:
-        self.root.after(0, lambda: self.set_busy(busy, status))
-
-    def run_subprocess(self, cmd: list[str], input_text: str | None = None, timeout: int | None = None) -> int:
-        display = " ".join(quote_arg(part) for part in cmd)
-        self.log(f"> {display}")
         try:
-            process = subprocess.Popen(
-                cmd,
-                stdin=subprocess.PIPE if input_text is not None else None,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                creationflags=create_no_window_flag(),
-            )
-            if input_text is not None and process.stdin:
-                try:
-                    process.stdin.write(input_text)
-                    process.stdin.flush()
-                    process.stdin.close()
-                except Exception:
-                    pass
-            start = time.time()
-            assert process.stdout is not None
-            while True:
-                line = process.stdout.readline()
-                if line:
-                    self.log(line.rstrip())
-                elif process.poll() is not None:
-                    break
-                elif timeout and (time.time() - start) > timeout:
-                    process.kill()
-                    self.log("Command timed out and was stopped.")
-                    return -1
-            return process.wait()
-        except FileNotFoundError:
-            self.log(f"Command not found: {cmd[0]}")
-            return 127
-
-    def confirm(self, title: str, message: str) -> bool:
-        result: list[bool] = []
-        event = threading.Event()
-
-        def ask() -> None:
-            result.append(messagebox.askyesno(title, message))
-            event.set()
-
-        self.root.after(0, ask)
-        event.wait()
-        return bool(result and result[0])
-
-    # -----------------------------
-    # Feature actions
-    # -----------------------------
-
-    def run_validation(self) -> None:
-        self.start_worker("Check Requirements", self.validation_action)
-
-    def validation_action(self) -> None:
-        self.log("Checking requirements...")
-        self.log(f"Windows detected: {'Yes' if is_windows() else 'No'}")
-        self.log(f"Administrator mode: {'Yes' if is_admin() else 'No'}")
-        for feature, commands in FEATURE_COMMANDS.items():
-            if not commands:
-                self.log(f"{feature}: no external command required")
-                continue
-            missing = [cmd for cmd in commands if not command_exists(cmd)]
-            if missing:
-                self.log(f"{feature}: missing {', '.join(missing)}")
+            if core.elevate():
+                self.root.destroy()
             else:
-                self.log(f"{feature}: ready")
+                messagebox.showerror("Administrator access", "Windows did not grant administrator access.")
+        except Exception as exc:
+            messagebox.showerror("Administrator access", str(exc))
 
-        if is_windows():
-            paths = self.temp_paths()
-            self.log("Cleanup folders that will be checked:")
-            for path in paths:
-                status = "found" if path.exists() else "not found"
-                self.log(f" - {path} ({status})")
-        self.log("Requirement check finished.")
-
-    def run_delete_temp(self) -> None:
-        if not self.require_ready("Clean Temporary Files", FEATURE_COMMANDS["Clean Temporary Files"]):
+    def _start(self, title: str, work) -> None:
+        if self.busy:
+            messagebox.showinfo("Busy", "Wait for the current task to finish.")
             return
-        if not messagebox.askyesno(
-            "Confirm cleanup",
-            "This will remove files inside Windows Temp, Prefetch, and user Temp folders. Files currently used by Windows will be skipped. Continue?",
-        ):
-            return
-        self.start_worker("Clean Temporary Files", self.delete_temp_action)
-
-    def temp_paths(self) -> list[Path]:
-        system_root = Path(os.environ.get("SystemRoot", r"C:\Windows"))
-        paths = [
-            system_root / "Temp",
-            system_root / "Prefetch",
-            Path(tempfile.gettempdir()),
-        ]
-        users_root = Path(os.environ.get("SystemDrive", "C:")) / "Users"
-        if users_root.exists():
-            for user_dir in users_root.iterdir():
-                temp_dir = user_dir / "AppData" / "Local" / "Temp"
-                if temp_dir.exists():
-                    paths.append(temp_dir)
-        unique: list[Path] = []
-        seen: set[str] = set()
-        for path in paths:
-            key = str(path).lower()
-            if key not in seen:
-                unique.append(path)
-                seen.add(key)
-        return unique
-
-    def safe_clean_folder(self, folder: Path) -> tuple[int, int, int]:
-        folder = folder.resolve()
-        if not folder.exists() or not folder.is_dir():
-            self.log(f"Skipped missing folder: {folder}")
-            return 0, 0, 0
-
-        allowed_names = {"temp", "prefetch"}
-        if folder.name.lower() not in allowed_names:
-            self.log(f"Safety skip: {folder} is not a recognized temp folder.")
-            return 0, 0, 1
-
-        files_removed = 0
-        dirs_removed = 0
-        failed = 0
-        self.log(f"Cleaning: {folder}")
-        for item in list(folder.iterdir()):
+        self.busy = True
+        self.status.configure(text=f"Running {title}…")
+        self.log(f"Started {title}")
+        def worker() -> None:
             try:
-                if item.is_dir() and not item.is_symlink():
-                    shutil.rmtree(item, ignore_errors=False)
-                    dirs_removed += 1
-                else:
-                    item.unlink(missing_ok=True)
-                    files_removed += 1
+                outcome = work()
+                result = outcome or f"Completed {title}"
+                self.log(result)
             except Exception as exc:
-                failed += 1
-                self.log(f"Could not remove {item}: {exc}")
-        return files_removed, dirs_removed, failed
+                self.log(f"Failed {title}: {exc}")
+                result = f"Failed {title}: {exc}"
+            self.events.put(("done", result))
+        threading.Thread(target=worker, daemon=True).start()
 
-    def delete_temp_action(self) -> None:
-        total_files = 0
-        total_dirs = 0
-        total_failed = 0
-        for folder in self.temp_paths():
-            files_removed, dirs_removed, failed = self.safe_clean_folder(folder)
-            total_files += files_removed
-            total_dirs += dirs_removed
-            total_failed += failed
-        self.log(f"Cleanup summary: files removed={total_files}, folders removed={total_dirs}, skipped/failed={total_failed}")
-
-    def run_network_reset(self) -> None:
-        if not self.require_ready("Reset Internet Connection", FEATURE_COMMANDS["Reset Internet Connection"]):
+    def run_action(self, title: str) -> None:
+        if self.busy:
+            messagebox.showinfo("Busy", "Wait for the current task to finish.")
             return
-        if not messagebox.askyesno(
-            "Confirm network reset",
-            "This may temporarily disconnect your internet while DNS, IP, Winsock, TCP/IP, and network adapters are reset. Continue?",
-        ):
+        if not core.is_admin():
+            messagebox.showinfo("Administrator required", "Run the app as administrator to perform maintenance.")
             return
-        self.start_worker("Reset Internet Connection", self.network_reset_action)
-
-    def network_reset_action(self) -> None:
-        self.log("Flushing DNS cache...")
-        for _ in range(20):
-            self.run_subprocess(["ipconfig", "/flushdns"])
-        self.run_subprocess(["ipconfig", "/release"])
-        self.run_subprocess(["ipconfig", "/renew"])
-        self.run_subprocess(["netsh", "winsock", "reset"])
-        self.run_subprocess(["netsh", "int", "ip", "reset"])
-
-        ps_script = (
-            "$adapters = Get-NetAdapter | Where-Object {$_.Status -eq 'Up' -and $_.HardwareInterface -eq $true}; "
-            "foreach ($a in $adapters) { "
-            "Write-Output ('Restarting adapter: ' + $a.Name); "
-            "Disable-NetAdapter -Name $a.Name -Confirm:$false -ErrorAction Continue; "
-            "Start-Sleep -Seconds 3; "
-            "Enable-NetAdapter -Name $a.Name -Confirm:$false -ErrorAction Continue "
-            "}"
-        )
-        self.run_subprocess(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script])
-        self.run_subprocess(["ipconfig", "/all"])
-        self.log("Network reset completed. Restart the PC if internet issues continue.")
-
-    def run_health_check(self) -> None:
-        if not self.require_ready("Repair Windows System", FEATURE_COMMANDS["Repair Windows System"]):
+        details = {
+            "Clean temporary files": "Remove files in your Temp and Windows Temp folders?",
+            "Refresh network": "Flush DNS and renew DHCP? This may briefly interrupt your connection but does not require a restart.",
+            "Repair network stack": "Reset Winsock and TCP/IP? Windows requires a restart to apply these changes.",
+            "Repair Windows": "Run DISM and SFC? This may take a long time.",
+            "Run full maintenance": "Run cleanup, quick network refresh, and Windows repair in sequence?",
+        }
+        if not messagebox.askyesno(f"Confirm {title}", details[title]):
             return
-        if not messagebox.askyesno(
-            "Confirm Windows repair",
-            "This runs DISM, SFC, and CHKDSK. It can take a long time, and CHKDSK may run after the next restart. Continue?",
-        ):
-            return
-        self.start_worker("Repair Windows System", self.health_check_action)
+        def work() -> str | None:
+            if title in ("Clean temporary files", "Run full maintenance"):
+                core.clean_temp(self.log)
+            if title in ("Refresh network", "Run full maintenance"):
+                network_complete = core.refresh_network(self.log)
+            if title == "Repair network stack":
+                network_complete = core.reset_network(self.log)
+            if title in ("Repair Windows", "Run full maintenance"):
+                core.repair_windows(self.log)
+            if title in ("Refresh network", "Run full maintenance") and not network_complete:
+                return "DNS cleared; DHCP renewal was unavailable. Review the log. No restart requested."
+            if title == "Repair network stack":
+                return "Network stack reset completed; restart Windows to apply it." if network_complete else "Network stack partially reset; restart Windows and review the log."
+        self._start(title, work)
 
-    def health_check_action(self) -> None:
-        self.run_subprocess(["DISM", "/Online", "/Cleanup-Image", "/ScanHealth"])
-        self.run_subprocess(["DISM", "/Online", "/Cleanup-Image", "/CheckHealth"])
-        self.run_subprocess(["DISM", "/Online", "/Cleanup-Image", "/RestoreHealth"])
-        self.run_subprocess(["SFC", "/SCANNOW"])
-        self.run_subprocess(["chkdsk", "C:", "/F", "/R"], input_text="Y\n")
-        self.log("Windows repair finished. Restart Windows if CHKDSK was scheduled.")
-
-    def run_task_slayer(self) -> None:
-        if not self.require_ready("Close Background Apps", FEATURE_COMMANDS["Close Background Apps"]):
+    def close_apps(self) -> None:
+        selected = list(self.selected_pids)
+        if not selected:
+            messagebox.showinfo("Select apps", "Select one or more running apps first.")
             return
-        if not messagebox.askyesno(
-            "Confirm app closing",
-            "This can close browsers, chat apps, coding tools, office apps, engineering apps, and other background programs. Save your work first. Continue?",
-        ):
+        processes = [self.apps[key] for key in selected if key in self.apps]
+        names = sorted({self.apps[key][0] for key in selected if key in self.apps})
+        if not messagebox.askyesno("Close selected apps",
+                                   f"Force-close {len(processes)} process(es)? Unsaved work will be lost.\n\n" + ", ".join(names)):
             return
-        self.start_worker("Close Background Apps", self.task_slayer_action)
+        def work() -> str:
+            result = core.close_selected(processes, self.log)
+            status = f"Closed {result.closed}; {result.already_stopped} already stopped; {result.failed} failed."
+            if result.still_running:
+                status += f" {len(result.still_running)} app name(s) still running or restarted."
+            return status
+        self._start("selected apps", work)
 
-    def task_slayer_action(self) -> None:
-        killed = 0
-        not_running_or_failed = 0
-        for group, processes in TASK_SLAYER_GROUPS.items():
-            self.log(f"-- {group} --")
-            for process_name in processes:
-                code = self.run_subprocess(["taskkill", "/F", "/IM", process_name])
-                if code == 0:
-                    killed += 1
-                else:
-                    not_running_or_failed += 1
-        self.log(f"App closing summary: closed/matched={killed}, not running or failed={not_running_or_failed}")
+    def copy_log(self) -> None:
+        self.root.clipboard_clear()
+        self.root.clipboard_append("".join(getattr(self, "log_lines", [])))
+        self.status.configure(text="Activity copied to clipboard")
 
-    def run_all_tasks(self) -> None:
-        all_commands = [cmd for commands in FEATURE_COMMANDS.values() for cmd in commands]
-        if not self.require_ready("Run Full Optimization", all_commands):
-            return
-        if not messagebox.askyesno(
-            "Confirm full optimization",
-            "This will run cleanup, network reset, Windows repair, and app closing in order. It may disconnect internet, close apps, and schedule CHKDSK on restart. Continue?",
-        ):
-            return
-        self.start_worker("Run Full Optimization", self.run_all_action)
-
-    def run_all_action(self) -> None:
-        self.log("Running full sequence: Cleanup -> Network Reset -> Windows Repair -> Close Apps")
-        self.delete_temp_action()
-        self.network_reset_action()
-        self.health_check_action()
-        self.task_slayer_action()
-        self.log("Full optimization completed.")
+    def clear_log(self) -> None:
+        self.log_lines = []
+        if hasattr(self, "log_box") and self.log_box.winfo_exists():
+            self.log_box.configure(state="normal")
+            self.log_box.delete("1.0", "end")
+            self.log_box.configure(state="disabled")
 
 
 def main() -> None:
     root = tk.Tk()
-    PCOptimizerApp(root)
+    App(root)
     root.mainloop()
 
 
