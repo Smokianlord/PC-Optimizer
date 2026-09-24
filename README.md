@@ -2,6 +2,16 @@
 
 PC Optimizer 3.0.0 is a Windows desktop control center built with Python and Tkinter. It has a Dashboard, App Manager, Maintenance page, and live activity log visible throughout the app.
 
+## Preview
+
+### Dashboard
+
+<img src="ui_preview.png" alt="PC Optimizer dashboard" width="900">
+
+| App Manager | Maintenance |
+| --- | --- |
+| <img src="ui_app_manager.png" alt="App Manager with process selection" width="440"> | <img src="ui_maintenance.png" alt="Maintenance actions and live activity log" width="440"> |
+
 ## Features
 
 - View available memory, free disk space, and the number of running user apps.
